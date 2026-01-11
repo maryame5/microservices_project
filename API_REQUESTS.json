@@ -1,0 +1,68 @@
+{
+  "name": "Microservices Bibliothèque",
+  "description": "Collection de tests pour l'architecture microservices",
+  "version": "1.0",
+  "baseUrl": "http://localhost:9999",
+  "requests": [
+    {
+      "name": "1. Health Check - Eureka",
+      "method": "GET",
+      "url": "http://localhost:8761/eureka/apps",
+      "description": "Vérifier que tous les services sont enregistrés dans Eureka"
+    },
+    {
+      "name": "2. List Users",
+      "method": "GET",
+      "url": "http://localhost:9999/user-service/users",
+      "description": "Lister tous les utilisateurs"
+    },
+    {
+      "name": "3. List Books",
+      "method": "GET",
+      "url": "http://localhost:9999/book-service/books",
+      "description": "Lister tous les livres"
+    },
+    {
+      "name": "4. Create Emprunt (Déclenche Kafka)",
+      "method": "POST",
+      "url": "http://localhost:9999/emprunt-service/emprunts",
+      "headers": {
+        "Content-Type": "application/json"
+      },
+      "body": {
+        "userId": 1,
+        "bookId": 5
+      },
+      "description": "Créer un nouvel emprunt - Déclenche un événement Kafka"
+    },
+    {
+      "name": "5. List Emprunts",
+      "method": "GET",
+      "url": "http://localhost:9999/emprunt-service/emprunts",
+      "description": "Lister tous les emprunts"
+    },
+    {
+      "name": "6. Health Check - User Service",
+      "method": "GET",
+      "url": "http://localhost:8082/actuator/health",
+      "description": "Vérifier la santé du service utilisateur"
+    },
+    {
+      "name": "7. Health Check - Book Service",
+      "method": "GET",
+      "url": "http://localhost:8081/actuator/health",
+      "description": "Vérifier la santé du service livre"
+    },
+    {
+      "name": "8. Health Check - Emprunter Service",
+      "method": "GET",
+      "url": "http://localhost:8085/actuator/health",
+      "description": "Vérifier la santé du service emprunt"
+    }
+  ],
+  "notes": {
+    "kafka": "Après avoir créé un emprunt, vérifier les logs du service notification (docker-compose logs -f notification-service)",
+    "postgres": "Données sauvegardées dans PostgreSQL (localhost:5432) - DB: crm_user/crm_password",
+    "discovery": "Tous les services se découvrent automatiquement via Eureka Server (port 8761)"
+  }
+}

@@ -1,0 +1,228 @@
+version: "3.8"
+
+services:
+
+  # ============================================
+  # INFRASTRUCTURE - Eureka Server
+  # ============================================
+  eureka-server:
+    build: ./eurika
+    container_name: eureka-service
+    ports:
+      - "8761:8761"
+    environment:
+      - SPRING_APPLICATION_NAME=eureka-service
+    networks:
+      - biblio-network
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://localhost:8761/actuator/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # ============================================
+  # DATABASE - MySQL
+  # ============================================
+  mysql-db:
+    image: mysql:8.4
+    container_name: mysql-db
+    environment:
+      - MYSQL_ROOT_PASSWORD=rootpassword
+      - MYSQL_USER=crm_user
+      - MYSQL_PASSWORD=crm_password
+      - MYSQL_DATABASE=db_user
+    ports:
+      - "3306:3306"
+    command: ["mysqld", "--default-authentication-plugin=mysql_native_password"]
+    volumes:
+      - mysql_data:/var/lib/mysql
+      - ./init-db.sql:/docker-entrypoint-initdb.d/init.sql
+    networks:
+      - biblio-network
+    healthcheck:
+      test: ["CMD-SHELL", "mysqladmin ping -h localhost -uroot -p$${MYSQL_ROOT_PASSWORD}"]
+      interval: 10s
+      timeout: 10s
+      retries: 10
+
+  # ============================================
+  # MESSAGE BROKER - Kafka & Zookeeper
+  # ============================================
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    ports:
+      - "2181:2181"
+    networks:
+      - biblio-network
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    depends_on:
+      - zookeeper
+    ports:
+      - "9092:9092"
+      - "29092:29092"
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:9092,PLAINTEXT_INTERNAL://kafka:29092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_INTERNAL:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT_INTERNAL
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+    networks:
+      - biblio-network
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-topics --bootstrap-server localhost:9092 --list >/dev/null"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+
+  kafka-init:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka-init
+    depends_on:
+      kafka:
+        condition: service_started
+    networks:
+      - biblio-network
+    entrypoint: ["bash", "-c"]
+    command: >-
+      kafka-topics --bootstrap-server kafka:9092 --create --if-not-exists --topic emprunt-created --partitions 1 --replication-factor 1
+    restart: "no"
+
+  # ============================================
+  # API GATEWAY
+  # ============================================
+  gateway-service:
+    build: ./gateway
+    container_name: gateway-service
+    ports:
+      - "9999:9999"
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+    environment:
+      - SPRING_APPLICATION_NAME=gateway-service
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-service:8761/eureka
+    networks:
+      - biblio-network
+
+  # ============================================
+  # MICROSERVICES - User Service
+  # ============================================
+  user-service:
+    build: ./user
+    container_name: user-service
+    ports:
+      - "8082:8082"
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      mysql-db:
+        condition: service_healthy
+    environment:
+      - SPRING_APPLICATION_NAME=user-service
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-service:8761/eureka
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/db_user
+      - SPRING_DATASOURCE_USERNAME=crm_user
+      - SPRING_DATASOURCE_PASSWORD=crm_password
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    networks:
+      - biblio-network
+
+  # ============================================
+  # MICROSERVICES - Book Service
+  # ============================================
+  book-service:
+    build: ./book
+    container_name: book-service
+    ports:
+      - "8081:8081"
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      mysql-db:
+        condition: service_healthy
+    environment:
+      - SPRING_APPLICATION_NAME=book-service
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-service:8761/eureka
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/db_book
+      - SPRING_DATASOURCE_USERNAME=crm_user
+      - SPRING_DATASOURCE_PASSWORD=crm_password
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    networks:
+      - biblio-network
+
+  # ============================================
+  # MICROSERVICES - Emprunter Service (Producer)
+  # ============================================
+  emprunt-service:
+    build: ./emprunter
+    container_name: emprunt-service
+    ports:
+      - "8085:8085"
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      mysql-db:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+      user-service:
+        condition: service_started
+      book-service:
+        condition: service_started
+    environment:
+      - SPRING_APPLICATION_NAME=emprunt-service
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-service:8761/eureka
+      - SPRING_DATASOURCE_URL=jdbc:mysql://mysql-db:3306/db_emprunter
+      - SPRING_DATASOURCE_USERNAME=crm_user
+      - SPRING_DATASOURCE_PASSWORD=crm_password
+      - SPRING_JPA_HIBERNATE_DDL_AUTO=update
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+    networks:
+      - biblio-network
+
+  # ============================================
+  # MICROSERVICES - Notification Service (Consumer)
+  # ============================================
+  notification-service:
+    build: ./notification
+    container_name: notification-service
+    ports:
+      - "8086:8086"
+    depends_on:
+      eureka-server:
+        condition: service_healthy
+      kafka:
+        condition: service_started
+    environment:
+      - SPRING_APPLICATION_NAME=notification-service
+      - EUREKA_CLIENT_SERVICEURL_DEFAULTZONE=http://eureka-service:8761/eureka
+      - SPRING_KAFKA_BOOTSTRAP_SERVERS=kafka:9092
+      - SPRING_KAFKA_CONSUMER_BOOTSTRAP_SERVERS=kafka:9092
+      - SPRING_KAFKA_CONSUMER_GROUP_ID=notification-group
+    networks:
+      - biblio-network
+
+# ============================================
+# VOLUMES
+# ============================================
+volumes:
+  mysql_data:
+    driver: local
+
+# ============================================
+# NETWORKS
+# ============================================
+networks:
+  biblio-network:
+    driver: bridge
