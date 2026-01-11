@@ -16,7 +16,7 @@ Cette application est une architecture microservices complète pour la gestion d
 6. **Notification Service** - Service de notifications asynchrones (port 8086) - Consommateur Kafka
 
 ### 🗄️ Infrastructure
-- **MySQL 8.4** - Base de données (port 3306) - _Database per Service_ via 3 schémas :
+- **MySQL 8.4** - Base de données (port hôte 3307 → conteneur 3306) - _Database per Service_ via 3 schémas :
   - `db_user` - Base de données User Service
   - `db_book` - Base de données Book Service
   - `db_emprunter` - Base de données Emprunter Service
@@ -51,8 +51,9 @@ Notification Service (Consommateur)
 ### Démarrage avec Docker Compose
 
 ```bash
-# 1. Aller dans le répertoire du projet
-cd d:\TP1_MOCROSERVICE\microservicesapp
+# 1. Cloner le dépôt
+git clone https://github.com/maryame5/microservices_project.git
+cd microservices_project
 
 # 2. Démarrer (build + run)
 docker-compose up --build
@@ -201,7 +202,7 @@ SHOW DATABASES;
 ```
 microservicesapp/
 ├── docker-compose.yaml      # Orchestration tous services
-├── init-db.sql              # Initialisation PostgreSQL
+├── init-db.sql              # Initialisation MySQL (création des bases)
 ├── eurika/                  # Service Eureka
 ├── gateway/                 # API Gateway
 ├── user/                    # User Service
@@ -227,8 +228,8 @@ microservicesapp/
 - **Spring Cloud 2024.0.0** - Microservices
 - **Spring Data JPA** - Persistence
 - **Spring Kafka** - Message broker
-- **PostgreSQL 15** - Base de données
-- **Apache Kafka 7.5.0** - Event streaming
+- **MySQL 8.4** - Base de données
+- **Apache Kafka (Confluent 7.5.0)** - Event streaming
 - **Eureka** - Service discovery
 - **Spring Cloud Gateway** - API Gateway
 - **OpenFeign** - Communication inter-services
@@ -256,27 +257,16 @@ docker-compose logs eureka-server
 docker network inspect microservicesapp_biblio-network
 ```
 
-### PostgreSQL connection refused
+### MySQL connection refused
 ```bash
-# S'assurer que le conteneur PostgreSQL est démarré
-docker-compose ps | grep postgres
+# S'assurer que le conteneur MySQL est démarré et healthy
+docker-compose ps | findstr mysql-db
 
-# Vérifier les logs PostgreSQL
-docker-compose logs postgres-db
+docker-compose logs mysql-db
+
+# Se connecter depuis l'hôte (port 3307)
+mysql -h 127.0.0.1 -P 3307 -u crm_user -pcrm_password
 ```
 
 ---
 
-## 📞 Support et évolution
-
-### Prochaines étapes possibles:
-- [ ] Ajouter authentification/autorisation (Spring Security)
-- [ ] Implémenter des transactions distribuées (Saga pattern)
-- [ ] Ajouter des métriques (Micrometer/Prometheus)
-- [ ] Configurer log centralisé (ELK Stack)
-- [ ] Ajouter des tests d'intégration
-- [ ] Déploiement sur Kubernetes
-
----
-
-**Dernière mise à jour:** 11 Janvier 2026
