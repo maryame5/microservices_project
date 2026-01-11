@@ -2,7 +2,8 @@
 
 ## 📋 Vue d'ensemble du projet
 
-Nom / Prénom : _à renseigner_
+Nom / Prénom : EL KHALFI MARYAME
+
 
 Cette application est une architecture microservices complète pour la gestion d'une bibliothèque avec:
 
@@ -77,7 +78,7 @@ docker-compose up -d
 
 MySQL (unique instance, 3 bases) :
 ```
-Host: localhost:3306
+Host: localhost:3307
 User: crm_user
 Password: crm_password
 Databases: db_user, db_book, db_emprunter
